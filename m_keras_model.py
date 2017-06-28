@@ -1,11 +1,13 @@
 import argparse
 import os.path
 import numpy as np 
+from keras import regularizers
 from keras.models import Sequential, Model, load_model
 from keras.layers import Input, Dense, Dropout, Flatten
 from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
+import m_layers
 
 
 dim = []
@@ -16,18 +18,16 @@ path_tracking = 'sim_tracking/053/'
 
 
 # load data
-def obj_parser(coarse_file, fine_file, batch_coarse, batch_fine, dim):
+def obj_parser(file_name, batch_data, dim):
     # position v, velocity nv
-    dim_c = 0 # input dimension 6*cN
-    dim_f = 0 # output dimension 6*fN
+    dim = 0 
     if not os.path.isfile(coarse_file):
         print "file not exist"
         return
     
     vert = []
-    coarse = []
-    fine = []
-    with open(coarse_file, "r") as f1:
+    sample = []
+    with open(file_name, "r") as f1:
         for line in f1:
             s = line.strip().split(' ')
             if s[0] == 'v':
@@ -35,75 +35,85 @@ def obj_parser(coarse_file, fine_file, batch_coarse, batch_fine, dim):
             elif s[0] == 'nv':
                 vert.extend(map(float, s[1:]))
             if len(vert) == 6:
-                dim_c = dim_c + 1
-                coarse.append(vert)
+                dim = dim + 1
+                sample.append(vert)
                 vert = []
 
-    with open(fine_file, "r") as f2:
-        for line in f2:
+    batch_data.append(sample)
+
+
+# parse data as 9*tri_num (position only)
+def obj2tri(file_name, batch_data):
+    if not os.path.isfile(coarse_file):
+        print "file not exist"
+        return
+    vert = []
+    face = []
+    with open(file_name, "r") as f1:
+        for line in f1:
             s = line.strip().split(' ')
             if s[0] == 'v':
-                vert.extend(map(float, s[1:]))
-            elif s[0] == 'nv':
-                vert.extend(map(float, s[1:]))
-            if len(vert) == 6:
-                dim_f = dim_f + 1
-                fine.append(vert)
-                vert = []
-
-    dim.append(dim_c)
-    dim.append(dim_f)
-    batch_coarse.append(coarse)
-    batch_fine.append(fine)
+                vert.append(map(float, s[1:]))
+            #elif s[0] == 'nv':
+            #    vert.extend(map(float, s[1:]))
+            elif s[0] == 'f':
+                id1 = s[1].strip().split('/')[0] - 1  # index start at 1
+                id2 = s[2].strip().split('/')[0] - 1
+                id3 = s[3].strip().split('/')[0] - 1
+                face.extend(vert[id1]).extend(vert[id2]).extend(vert[id3])
+                batch_data.append(face)
 
 
-def setmodel(dim):
+def setmodel():
     # define model
     # set to global --> model = Sequential()
-    model.add(Dense(units=64, input_shape=(dim[0],6)))
+    #model.add(Dense(units=64, input_shape=(dim[0],6)))
+        # kernel_regularizer=regularizers.l2(0.01),
+        # activity_regularizer=regularizers.l1(0.01)))
+
+    #todo
+    model.add(Smooth(input_shape=(9,)))
     model.add(Activation('relu'))
     model.add(Dense(units=6))
-    model.add(Activation('relu')
+    model.add(Activation('relu'))
 
     # Configures the model for training.
     # model.compile(loss='mean_squared_error', optimizer='sgd')
     model.compile(loss='mse', optimizer='rmsprop', metrics=['accuracy'])
-    # model.compile(optimizer='rmsprop',
-    #           loss='binary_crossentropy',
-    #           metrics=['accuracy'])
     
     print "set model"
 
 
-def train(dim):
+def train():
     batch_coarse = []
     batch_fine = []
-    dim = []
+    bath_delta = []
+    #dim_c = 0
+    #dim_f = 0
 
     for x in xrange(1,101):
         file_name = str(x).zfill(5) + '_00.obj'
         coarse_file = path_coarse + file_name
         fine_file = path_tracking + file_name  # + path_index 
-        obj_parser(coarse_file, fine_file, batch_coarse, batch_fine, dim)
-
+        #obj_parser(coarse_file, batch_coarse, dim_c)
+        #obj_parser(fine_file, batch_fine, dim_f)
+        obj2tri(coarse_file, batch_coarse)
+        obj2tri(fine_file, batch_fine)
 
     # Trains the model for a fixed number of epochs (iterations on a dataset).
-    # fit
-    # x: training data, y: target data
     x_train = np.array(batch_coarse)
-    y_train = np.array(batch_fine)
-    # x_train = x.reshape(x.shape[0], x.shape[1], 6, 1)
-    # y_train = y.reshape(y.shape[0], y.shape[1], 6, 1)
+    y_train = np.array(batch_fine - batch_coarse)
 
-    model.fit(x_train, x_train, batch_size=100, epochs=20)
+    model.fit(x_train, x_train, batch_size=10, epochs=50)
 
     # evaluate the model
-    scores = model.evaluate(x_train, y_train,  batch_size=100)
+    scores = model.evaluate(x_train, y_train, batch_size=10)
     print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
 
     # debug
     # print initial weigths
     weights = model.layers[0].get_weights()
+    print weights
     
 
 def save():
@@ -121,16 +131,15 @@ def main():
         if args.modelweighth5:
             model.load_weights('my_model_weights.h5')
     else:
-        batch_coarse = []
-        batch_fine = []
-        file_name = "00001_00.obj"
-        coarse_file = path_coarse + file_name
-        fine_file = path_tracking + file_name
-        obj_parser(coarse_file, fine_file, batch_coarse, batch_fine, dim)
-        print dim
-        setmodel(dim)
+        #batch_coarse = []
+        #batch_fine = []
+        #file_name = "00001_00.obj"
+        #coarse_file = path_coarse + file_name
+        #fine_file = path_tracking + file_name
+        # obj_parser(coarse_file, fine_file, batch_coarse, batch_fine, dim)
+        setmodel()
 
-    train(dim)
+    train()
 
     save()
 

@@ -1,4 +1,5 @@
 import argparse
+import os, sys
 import os.path
 import operator
 import numpy as np 
@@ -10,14 +11,6 @@ from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
 from m_layers import Smooth, custom
-
-
-
-# dim = []
-# model = Sequential()
-
-path_coarse = 'sim_coarse/053d/'
-path_tracking = 'sim_tracking/053/'
 
 
 # load data
@@ -71,28 +64,14 @@ def obj2tri(file_name, batch_data):
     batch_data.append(data)
 
 
+#TODO
+# visualize output
+# def tri2obj():
+
+
 def setmodel():
-
     model = Sequential()
-    model.add(Smooth(input_shape=(1292,9), name='smoo_layer'))
-    
-    # sim_input = Input(shape=(1292,9), dtype='float32', name='sim_input')
-    #input_tensor = Input(shape=(1292,9), name='sim_input')
-    # smooth_layer = Smooth(activation=custom)
-
-    #smooth_layer = Smooth(shape=(1292,9), name='smoo_layer')
-    #smooth_layer.trainable = True
-    # smooth_out = Smooth(custom)(sim_input)
-    #out_tensor = smooth_layer(input_tensor)
-
-    # x = Dense(9, activation='relu', name="dense_one")(o_tensor)
-
-    # model = Model(inputs=sim_input, outputs=smooth_out)
-    #model = Model(input_tensor, out_tensor)
-
-    # print model.get_layer(index=1).name # smooth_1
-
-    # model.compile(loss='mean_squared_error', optimizer='sgd')
+    model.add(Smooth(input_shape=(1292,9), activation='relu', name='smoo_layer'))
     model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
 
     print "set model and compile"
@@ -101,19 +80,16 @@ def setmodel():
     return model
 
 
-def train(model):
+# extend dataset x y
+def load_data(path_coarse, path_tracking, x, y):
     batch_coarse = []
     batch_fine = []
     bath_delta = []
-    #dim_c = 0
-    #dim_f = 0
 
     for x in xrange(1,101):
         file_name = str(x).zfill(5) + '_00.obj'
         coarse_file = path_coarse + file_name
-        fine_file = path_tracking + file_name  # + path_index 
-        #obj_parser(coarse_file, batch_coarse, dim_c)
-        #obj_parser(fine_file, batch_fine, dim_f)
+        fine_file = path_tracking + file_name
         obj2tri(coarse_file, batch_coarse)
         obj2tri(fine_file, batch_fine)
 
@@ -124,39 +100,62 @@ def train(model):
         y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
         y_list.append(y_row)
     y_train = np.array(y_list)
-       
-    print x_train.shape
-    print y_train.shape
-    # print x_train[0]
-    # print y_train[0]
-    
-    # history = model.fit(x={'sim_input': x_train}, y={'smooth_out': y_train}, batch_size=32, epochs=20)
-    history = model.fit(x_train, y_train)
 
+    if len(x) == 0 and len(y) == 0:
+        x = x_train
+        y = y_train
+    else:
+        x.extend(x_train)
+        y.extend(y_train)
+
+
+def train(model, x_train, y_train):
+    history = model.fit(x_train, y_train, batch_size=32, epochs=20)
     print(history.history.keys())
 
-    # evaluate the model
-    # scores = model.evaluate(x_train, y_train, batch_size=10)
-    # print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
 
-    # debug
-    # print initial weigths
-    # weights = model.layers[0].get_weights()
-    # print weights
-    
+def eval(model, x_test, y_target):
+    # evaluate the model
+    scores = model.evaluate(x_test, y_target, batch_size=32)
+    print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+
+
+# Generates output predictions for the input samples.
+def pred(model, x):
+    y = model.predict(x, batch_size=32)
+    # save the output data
+    return y
+
 
 def save(model):
-    # print_summary(model)
     model.save('my_model.h5') 
     model.save_weights('my_model_weights.h5')
     
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--c', help="training: coarse dir")
+    parser.add_argument('--f', help="training: fine scale with track dir")
+    parser.add_argument('--tc', help="test dataset: coarse dir")
+    parser.add_argument('--tf', help="test dataset: fine scale with track dir")
     parser.add_argument("--load", help="bool flag, False by default")
     parser.add_argument("--modelh5", help="load exist model")
     parser.add_argument("--modelweighth5", help="load model weights")
     args = parser.parse_args()
+    if len(sys.argv) < 4:
+        print "Usage: --c=coarse_dir --f=tracking_dir --tc=test_coarse --tf=test_tracking optional* --> use --help"
+        return 0
+
+    coarseDir = args.c
+    fineDir = args.f
+    test_coarseDir = args.tc
+    test_fineDir = args.tf
+    print type(coarseDir)
+    print "training dataset: "
+    print ">>>  " + coarseDir + "  >>>  " + fineDir
+    print "test dataset: "
+    print ">>>  " + test_coarseDir + "  >>>  " + test_fineDir
+
     # if args.load and args.modelh5:
     #     print "load pre-trained model..."
     #     model = load_model('my_model.h5')
@@ -172,8 +171,24 @@ def main():
         #setmodel()
 
     model = setmodel()
+    x_train = np.empty(0)
+    y_train = np.empty(0)
+    x_test = np.empty(0)
+    y_test = np.empty(0)
 
-    train(model)
+    for dirName, subdirList, fileList in os.walk(coarseDir):
+        print('Found directory: %s' % dirName)
+        load_data(coarseDir + dirName, fineDir + dirName, x_train, y_train)
+
+    print len(x)
+    print x[0]
+
+    train(model, x_train, y_train)
+
+    for dirName, subdirList, fileList in os.walk(test_coarseDir):
+        print('Found directory: %s' % dirName)
+        load_data(test_coarseDir + dirName, test_fineDir + dirName, x_test, y_test)
+    eval(model, x_test, y_test)
 
     save(model)
 

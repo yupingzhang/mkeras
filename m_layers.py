@@ -92,9 +92,11 @@ class Densepool(Layer):
         #TODO
         tri = K.reshape(input, (dim[1], 3, 3))
         mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')
-
+        print "mtx_tensor shape >>> "
+        print K.int_shape(mtx_tensor)
         output = K.sum(mtx_tensor, axis=0)
-
+        print "output shape >>> "
+        print K.int_shape(output)
         
         if self.activation is not None:
             return self.activation(output)
@@ -112,7 +114,7 @@ def compressmtx(face_mtx):
     print "face_mtx shape >>> "
     print face_mtx.shape
     print "c shape >>> "
-    print c.shape
+    print c.size
 
     return c
 

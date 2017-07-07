@@ -46,9 +46,9 @@ def face2mtx(objfile, dim):
 
 
 # load data to (pos vel) 6N dimention
-def obj_parser(file_name, batch_data, dim):
+# or:  load data to (pos ) 3N dimention
+def obj_parser(file_name, batch_data):
     # position v, velocity nv
-    dim = 0 
     if not os.path.isfile(file_name):
         print "file not exist"
         return
@@ -60,10 +60,10 @@ def obj_parser(file_name, batch_data, dim):
             s = line.strip().split(' ')
             if s[0] == 'v':
                 vert.extend(map(float, s[1:]))
-            elif s[0] == 'nv':
-                vert.extend(map(float, s[1:]))
-            if len(vert) == 6:
-                dim = dim + 1
+            # elif s[0] == 'nv':
+                # vert.extend(map(float, s[1:]))
+            # if len(vert) == 6:
+            if len(vert) == 3:
                 sample.append(vert)
                 vert = []
 

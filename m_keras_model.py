@@ -11,7 +11,7 @@ from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
 from m_layers import Smooth, Densepool, compressmtx
-from util import face2mtx, obj2tri, tri2obj, write_obj
+from util import obj_parser, face2mtx, obj2tri, tri2obj, write_obj
 
 
 def setmodel(input_shape, mtx):
@@ -33,25 +33,28 @@ def setmodel(input_shape, mtx):
 # extend dataset x y
 def load_data(path_coarse, path_tracking):
     batch_coarse = []
-    batch_fine = []
-    bath_delta = []
+    vert_coarse = []
+    vert_fine = []
+    vert_delta = []
 
     for x in xrange(1,101):
         file_name = str(x).zfill(5) + '_00.obj'
         coarse_file = path_coarse + '/' + file_name
         fine_file = path_tracking + '/' + file_name
         obj2tri(coarse_file, batch_coarse)
-        obj2tri(fine_file, batch_fine)
+        # obj2tri(fine_file, batch_fine)
+        obj_parser(coarse_file, vert_coarse)
+        obj_parser(fine_file, vert_fine)
         
     # Trains the model for a fixed number of epochs (iterations on a dataset).
     x_train = np.array(batch_coarse) 
-    y_list = []
-    for i in range(len(batch_fine)):
-        y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
-        y_list.append(y_row)
-    y_train = np.array(y_list)
-
-    return x_train, y_train
+    
+    for i in range(len(vert_fine)):
+        y_row = np.array(vert_fine[i]) - np.array(vert_coarse[i])
+        vert_delta.append(y_row)
+    y_target = np.array(vert_delta)
+  
+    return x_train, y_target
 
 
 def train(model, x_train, y_train):
@@ -122,7 +125,7 @@ def main():
         x_test = np.empty(0)
         y_test = np.empty(0)
 
-        print 'loading data...'
+        print ">>>>>>> loading data..."
         for dirName, subdirList, fileList in os.walk(coarseDir):
             total = len(subdirList)
             count = 0
@@ -143,6 +146,9 @@ def main():
             print "Error: no input training data."
             return 0
 
+        print ">>>>>>> train model..."
+        print x_train.shape
+        print y_train.shape
         train(model, x_train, y_train)
 
         print 'load test data to evaluate...'

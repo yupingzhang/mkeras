@@ -25,7 +25,7 @@ def face2mtx(objfile, dim):
         print "file not exist"
         return
     
-    mtx = np.array([np.zeros(dim[1]) for item in range(dim[0])])
+    mtx = np.array([np.zeros((dim[1], 3)) for item in range(dim[0])])
     tri_id = 0
 
     with open(objfile, "r") as f1:
@@ -37,9 +37,9 @@ def face2mtx(objfile, dim):
                 id3 = int(s[3].strip().split('/')[0]) - 1
                 #TODO
                 # set the weight as 1
-                mtx[tri_id][id1] = 1
-                mtx[tri_id][id2] = 1
-                mtx[tri_id][id3] = 1
+                mtx[tri_id][id1] = [1, 0, 0]
+                mtx[tri_id][id2] = [0, 1, 0]
+                mtx[tri_id][id3] = [0, 0, 1]
                 tri_id = tri_id + 1
 
     return mtx

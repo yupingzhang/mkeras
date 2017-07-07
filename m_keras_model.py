@@ -16,23 +16,12 @@ from util import face2mtx, obj2tri, tri2obj, write_obj
 
 def setmodel(input_shape, mtx):
     # 1 subdivide & pooling
-    mesh_in = Input((input_shape[0],9))
+    mesh_in = Input((input_shape[0],9), name='mesh_input')
     smoo = Smooth(activation='relu', name='smoo_layer')(mesh_in)
-    pool = Densepool(mtx=mtx, output_dim=input_shape[1])(smoo)
-    # model_1.add(Smooth(input_shape=(input_shape[0],9), activation='relu', name='smoo_layer'))
-    # model_1.add(Densepool(mtx=mtx, output_dim=input_shape[1]))
-    # model_1.layers[1].trainable = False
+    pool = Densepool(mtx=mtx, output_dim=input_shape[1], name='pool_layer')(smoo)
     
-    # 2  
-    mtx_in = Input((input_shape))
-    mtx_1d = Lambda(compressmtx, output_shape=[input_shape[1]])(mtx_in)   
-
-    print "><><><><><> merge layer..."
-    # merge layer
-    merged = multiply([pool, mtx_1d]) 
-
     # model
-    model = Model(inputs=[mesh_in, mtx_in], outputs=[merged])
+    model = Model(inputs=[mesh_in], outputs=[pool])
     model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
 
     print "set model and compile"
@@ -42,18 +31,18 @@ def setmodel(input_shape, mtx):
 
 
 # extend dataset x y
-def load_data(path_coarse, path_tracking, x, y):
+def load_data(path_coarse, path_tracking):
     batch_coarse = []
     batch_fine = []
     bath_delta = []
 
     for x in xrange(1,101):
         file_name = str(x).zfill(5) + '_00.obj'
-        coarse_file = path_coarse + file_name
-        fine_file = path_tracking + file_name
+        coarse_file = path_coarse + '/' + file_name
+        fine_file = path_tracking + '/' + file_name
         obj2tri(coarse_file, batch_coarse)
         obj2tri(fine_file, batch_fine)
-
+        
     # Trains the model for a fixed number of epochs (iterations on a dataset).
     x_train = np.array(batch_coarse) 
     y_list = []
@@ -62,22 +51,17 @@ def load_data(path_coarse, path_tracking, x, y):
         y_list.append(y_row)
     y_train = np.array(y_list)
 
-    if len(x) == 0 and len(y) == 0:
-        x = x_train
-        y = y_train
-    else:
-        x.extend(x_train)
-        y.extend(y_train)
+    return x_train, y_train
 
 
-def train(model, x_train, mtx, y_train):
-    history = model.fit([x_train, mtx], y_train, batch_size=32, epochs=20)
+def train(model, x_train, y_train):
+    history = model.fit(x_train, y_train, batch_size=32, epochs=20)
     print(history.history.keys())
 
 
-def eval(model, x_test, mtx_test, y_target):
+def eval(model, x_test, y_target):
     # evaluate the model
-    scores = model.evaluate([x_test, mtx_test], y_target, batch_size=32)
+    scores = model.evaluate(x_test, y_target, batch_size=32)
     print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
 
 
@@ -86,7 +70,7 @@ def pred(x, v_dim, obj_in, obj_out):
     print "load pre-trained model..."
     model = load_model('my_model.h5')
     model.load_weights('my_model_weights.h5')
-    y = model.predict([x, mtx], batch_size=32)
+    y = model.predict(x, batch_size=32)
     # save the output data
     tri2obj(y, v_dim, obj_in, obj_out)
 
@@ -138,18 +122,45 @@ def main():
         x_test = np.empty(0)
         y_test = np.empty(0)
 
+        print 'loading data...'
         for dirName, subdirList, fileList in os.walk(coarseDir):
-            print('Found directory: %s' % dirName)
-            load_data(coarseDir + dirName, fineDir + dirName, x_train, y_train)
+            total = len(subdirList)
+            count = 0
+            for subdir in subdirList:
+                # print('Found directory: %s' % subdir)
+                if count%5 == 0:
+                    print str(float(count)/total*100) + '%'
+                count = count + 1
+                x, y = load_data(coarseDir + subdir, fineDir + subdir)
+                if x_train.size == 0:
+                    x_train = x
+                    y_train = y
+                else: 
+                    x_train = np.vstack((x_train, x))
+                    y_train = np.vstack((y_train, y))  
 
-        print len(x)
-        print x[0]
+        if x_train.size == 0:
+            print "Error: no input training data."
+            return 0
 
         train(model, x_train, y_train)
 
+        print 'load test data to evaluate...'
         for dirName, subdirList, fileList in os.walk(test_coarseDir):
-            print('Found directory: %s' % dirName)
-            load_data(test_coarseDir + dirName, test_fineDir + dirName, x_test, y_test)
+            for subdir in subdirList:
+                print('Found directory: %s' % subdir)
+                x, y = load_data(test_coarseDir + subdir, test_fineDir + subdir)
+                if x_test.size == 0:
+                    x_test = x
+                    y_test = y
+                else:
+                    x_test = np.vstack((x_test, x))
+                    y_test = np.vstack((y_test, y))
+
+        if x_test.size == 0:
+            print "Error: Need test dataset."
+            return 0
+        
         eval(model, x_test, y_test)
 
     save(model)

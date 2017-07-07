@@ -11,67 +11,28 @@ from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
 from m_layers import Smooth, custom
+from util import face2mtx, obj2tri, tri2obj
 
 
-# load data
-def obj_parser(file_name, batch_data, dim):
-    # position v, velocity nv
-    dim = 0 
-    if not os.path.isfile(file_name):
-        print "file not exist"
-        return
+def setmodel(input_dim, mtx):
+    # 1 model_1 subdivide & pooling
+    # mesh_in = Input((input_dim, 9))
+    # smoo = Smooth(input_shape=(input_dim,9), activation='relu', name='smoo_layer')(mesh_in) 
+    model_1 = Sequential()
+    model_1.add(Smooth(input_shape=(input_dim,9), activation='relu', name='smoo_layer'))
+    model_1.add(Densepool(kernel_initializer=pooling_kernal_init(mtx)))
     
-    vert = []
-    sample = []
-    with open(file_name, "r") as f1:
-        for line in f1:
-            s = line.strip().split(' ')
-            if s[0] == 'v':
-                vert.extend(map(float, s[1:]))
-            elif s[0] == 'nv':
-                vert.extend(map(float, s[1:]))
-            if len(vert) == 6:
-                dim = dim + 1
-                sample.append(vert)
-                vert = []
+    # 2 model_2 
+    mode_2 = Sequential()
+    model_2.add(Lambda(lambda face_mtx: [1.0/float(x) for x in K.sum(face_mtx, axis=1)]))
 
-    batch_data.append(sample)
+    # merges
+    merged = Merge([model_1, model_2], mode='multiply')
 
-
-# parse data as 9*tri_num (position only)
-def obj2tri(file_name, batch_data):
-    if not os.path.isfile(file_name):
-        print "file not exist"
-        return
-    vert = []
-    data = []
-    with open(file_name, "r") as f1:
-        for line in f1:
-            s = line.strip().split(' ')
-            if s[0] == 'v':
-                vert.append(map(float, s[1:]))
-            #elif s[0] == 'nv':
-            #    vert.extend(map(float, s[1:]))
-            elif s[0] == 'f':
-                face = []
-                id1 = int(s[1].strip().split('/')[0]) - 1  # index start at 1
-                id2 = int(s[2].strip().split('/')[0]) - 1
-                id3 = int(s[3].strip().split('/')[0]) - 1
-                face.extend(vert[id1])
-                face.extend(vert[id2])
-                face.extend(vert[id3])
-                data.append(face)
-    batch_data.append(data)
-
-
-#TODO
-# visualize output
-# def tri2obj():
-
-
-def setmodel():
+    # model
+    # model = Model(inputs=[mesh_in, face_mtx], outputs=[output])
     model = Sequential()
-    model.add(Smooth(input_shape=(1292,9), activation='relu', name='smoo_layer'))
+    model.add(merged)
     model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
 
     print "set model and compile"
@@ -109,22 +70,25 @@ def load_data(path_coarse, path_tracking, x, y):
         y.extend(y_train)
 
 
-def train(model, x_train, y_train):
-    history = model.fit(x_train, y_train, batch_size=32, epochs=20)
+def train(model, x_train, mtx, y_train):
+    history = model.fit('mesh_in': x_train, 'face_mtx': mtx, 'output': y_train, batch_size=32, epochs=20)
     print(history.history.keys())
 
 
-def eval(model, x_test, y_target):
+def eval(model, x_test, mtx_test, y_target):
     # evaluate the model
-    scores = model.evaluate(x_test, y_target, batch_size=32)
+    scores = model.evaluate([x_test, mtx_test], y_target, batch_size=32)
     print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
 
 
 # Generates output predictions for the input samples.
-def pred(model, x):
-    y = model.predict(x, batch_size=32)
+def pred(x, v_dim, obj_in, obj_out):
+    print "load pre-trained model..."
+    model = load_model('my_model.h5')
+    model.load_weights('my_model_weights.h5')
+    y = model.predict([x, mtx], batch_size=32)
     # save the output data
-    return y
+    tri2obj(y, v_dim, obj_in, obj_out)
 
 
 def save(model):
@@ -138,7 +102,7 @@ def main():
     parser.add_argument('--f', help="training: fine scale with track dir")
     parser.add_argument('--tc', help="test dataset: coarse dir")
     parser.add_argument('--tf', help="test dataset: fine scale with track dir")
-    parser.add_argument("--load", help="bool flag, False by default")
+    parser.add_argument("--resume", help="bool flag, False by default")
     parser.add_argument("--modelh5", help="load exist model")
     parser.add_argument("--modelweighth5", help="load model weights")
     args = parser.parse_args()
@@ -156,39 +120,42 @@ def main():
     print "test dataset: "
     print ">>>  " + test_coarseDir + "  >>>  " + test_fineDir
 
-    # if args.load and args.modelh5:
-    #     print "load pre-trained model..."
-    #     model = load_model('my_model.h5')
-    #     if args.modelweighth5:
-    #         model.load_weights('my_model_weights.h5')
-    # else:
-        #batch_coarse = []
-        #batch_fine = []
-        #file_name = "00001_00.obj"
-        #coarse_file = path_coarse + file_name
-        #fine_file = path_tracking + file_name
-        # obj_parser(coarse_file, fine_file, batch_coarse, batch_fine, dim)
-        #setmodel()
+    if args.resume and args.modelh5:
+        print "resume trained model..."
+        model = load_model('my_model.h5')
+        if args.modelweighth5:
+            model.load_weights('my_model_weights.h5')
+    else:
+        # load any file to get triangle dimention
+        batch_data = []
+        file_name = os.listdir(coarseDir)[0] + "00000_00.obj"
+        obj2tri(file_name, batch_data)
+        dim = len(batch_data[0])
+        mtx = face2mtx(objfile, f_dim)
+        # debug
+        print len(mtx)
+        print len(mtx[0])
 
-    model = setmodel()
-    x_train = np.empty(0)
-    y_train = np.empty(0)
-    x_test = np.empty(0)
-    y_test = np.empty(0)
+        # create model
+        model = setmodel(dim, mtx)
+        x_train = np.empty(0)
+        y_train = np.empty(0)
+        x_test = np.empty(0)
+        y_test = np.empty(0)
 
-    for dirName, subdirList, fileList in os.walk(coarseDir):
-        print('Found directory: %s' % dirName)
-        load_data(coarseDir + dirName, fineDir + dirName, x_train, y_train)
+        for dirName, subdirList, fileList in os.walk(coarseDir):
+            print('Found directory: %s' % dirName)
+            load_data(coarseDir + dirName, fineDir + dirName, x_train, y_train)
 
-    print len(x)
-    print x[0]
+        print len(x)
+        print x[0]
 
-    train(model, x_train, y_train)
+        train(model, x_train, y_train)
 
-    for dirName, subdirList, fileList in os.walk(test_coarseDir):
-        print('Found directory: %s' % dirName)
-        load_data(test_coarseDir + dirName, test_fineDir + dirName, x_test, y_test)
-    eval(model, x_test, y_test)
+        for dirName, subdirList, fileList in os.walk(test_coarseDir):
+            print('Found directory: %s' % dirName)
+            load_data(test_coarseDir + dirName, test_fineDir + dirName, x_test, y_test)
+        eval(model, x_test, y_test)
 
     save(model)
 

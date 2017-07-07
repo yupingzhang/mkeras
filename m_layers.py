@@ -75,7 +75,7 @@ class Densepool(Layer):
         self.activation = activations.get(activation)
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.trainable = False
-      super(Densepool, self).__init__(**kwargs)
+        super(Densepool, self).__init__(**kwargs)
 
     def build(self, input_shape):
         if input_shape is None:

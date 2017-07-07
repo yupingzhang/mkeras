@@ -107,7 +107,7 @@ def obj2tri(file_name, batch_data):
 # obj_in: original obj, just to copy index information
 # obj_out: output obj
 def tri2obj(input, v_dim, obj_in, obj_out):
-	if not os.path.isfile(objfile):
+    if not os.path.isfile(obj_in):
         print "file not exist"
         return
     
@@ -135,20 +135,20 @@ def tri2obj(input, v_dim, obj_in, obj_out):
     print len(faces)
     print vertices.shape
     if vertices.shape == 0:
-    	print "Error: vertices.shape=0"
+        print "Error: vertices.shape=0"
 
     # write to new file
     with open(obj_out, "w+") as f2:
-    	for x in range(vertices.shape):
-    		line = "{} {} {}\n".format(vertices[x][0], vertices[x][1], vertices[x][2])
-    		f2.write(line)
-    	for face in range(len(faces)):
-    		f2.write(face)
+        for x in range(vertices.shape):
+            line = "{} {} {}\n".format(vertices[x][0], vertices[x][1], vertices[x][2])
+            f2.write(line)
+        for face in range(len(faces)):
+            f2.write(face)
 
 
 # input is 3*n position
 def write_obj(input, v_dim, obj_in, obj_out):
-	if not os.path.isfile(objfile):
+    if not os.path.isfile(obj_in):
         print "file not exist"
         return
     
@@ -169,11 +169,11 @@ def write_obj(input, v_dim, obj_in, obj_out):
 
     # write to new file
     with open(obj_out, "w+") as f2:
-    	for x in range(vertices.shape):
-    		line = "{} {} {}\n".format(inputs[x][0], inputs[x][1], inputs[x][2])
-    		f2.write(line)
-    	for face in range(len(faces)):
-    		f2.write(face)
+        for x in range(vertices.shape):
+            line = "{} {} {}\n".format(inputs[x][0], inputs[x][1], inputs[x][2])
+            f2.write(line)
+        for face in range(len(faces)):
+            f2.write(face)
 
 
 

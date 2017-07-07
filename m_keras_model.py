@@ -10,7 +10,7 @@ from keras.layers import Input, Dense, Dropout, Flatten
 from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
-from m_layers import Smooth, custom
+from m_layers import Smooth, Densepool
 from util import face2mtx, obj2tri, tri2obj
 
 
@@ -71,7 +71,7 @@ def load_data(path_coarse, path_tracking, x, y):
 
 
 def train(model, x_train, mtx, y_train):
-    history = model.fit('mesh_in': x_train, 'face_mtx': mtx, 'output': y_train, batch_size=32, epochs=20)
+    history = model.fit([x_train, mtx], y_train, batch_size=32, epochs=20)
     print(history.history.keys())
 
 

@@ -59,21 +59,17 @@ class Smooth(Layer):
     def compute_output_shape(self, input_shape):
         return input_shape     # not changing the dimensions
 
-# ================================================================
-# mtx: np.array
-def pooling_kernal_init(shape, mtx):
-    return K.variable(value=mtx, dtype='float64', name='pooling_kernal')
-
-
 # a pool layer to pool values based on a dense weight matrix
 class Densepool(Layer):
 
     def __init__(self, 
+                 mtx,
+                 output_dim,
                  activation=None,
-                 kernel_initializer=pooling_kernal_init,
                  **kwargs):
+        self.mtx = mtx
+        self.output_dim = output_dim
         self.activation = activations.get(activation)
-        self.kernel_initializer = initializers.get(kernel_initializer)
         self.trainable = False
         super(Densepool, self).__init__(**kwargs)
 
@@ -81,21 +77,34 @@ class Densepool(Layer):
         if input_shape is None:
             raise RuntimeError('specify input shape')
 
-        # Create a non-trainable weight variable  
-        self.kernel = self.add_weight(name='poolingkernel',
-                                      shape=(input_shape[0],),
-                                      initializer=kernel_initializer,
-                                      trainable=False)
-
         super(Densepool, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        output = input * self.kernel   # multiply (element-wise) 
+        print "Densepool input >>> "
+        print K.int_shape(input)
+        print "Densepool mtx   >>> " 
+        print self.mtx.shape
+        weight = K.variable(value=self.mtx, name='pooling_kernal')
+        print "Densepool weight variable >>> "
+        print K.int_shape(weight)
+
+        output = K.transpose(input) * K.variable(value=self.mtx, name='pooling_kernal')   # multiply (element-wise) 
+        
         if self.activation is not None:
             return self.activation(output)
         else:
             return output
 
     def compute_output_shape(self, input_shape):
-        return input_shape 
+        return (input_shape[0], self.output_dim)
+
+
+def compressmtx(face_mtx):
+    print "face_mtx shape >>> "
+    print face_mtx.shape
+    c = K.sum(face_mtx, axis=1)
+    print "c shape >>> "
+    print c.shape
+    return c
+
 

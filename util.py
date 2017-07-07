@@ -1,4 +1,4 @@
-# util.py
+import os, sys
 import numpy as np
 
 
@@ -20,15 +20,15 @@ def custom(x):
 
 
 # face index to one-hot matrix
-def face2mtx(objfile, f_dim):
+def face2mtx(objfile, dim):
     if not os.path.isfile(objfile):
         print "file not exist"
         return
     
-    mtx = np.array([np.zeros(f_dim) for item in range(f_dim)])
+    mtx = np.array([np.zeros(dim[1]) for item in range(dim[0])])
     tri_id = 0
 
-    with open(file_name, "r") as f1:
+    with open(objfile, "r") as f1:
         for line in f1:
             s = line.strip().split(' ')
             if s[0] == 'f':
@@ -73,10 +73,11 @@ def obj_parser(file_name, batch_data, dim):
 # parse data as (p1 p2 p3) 9*tri_num (position only)
 def obj2tri(file_name, batch_data):
     if not os.path.isfile(file_name):
-        print "file not exist"
+        print file_name + " file not exist"
         return
     vert = []
     data = []
+    dim = [0, 0]
     with open(file_name, "r") as f1:
         for line in f1:
             s = line.strip().split(' ')
@@ -93,12 +94,16 @@ def obj2tri(file_name, batch_data):
                 # face.extend(vert[id2])
                 # face.extend(vert[id3])
                 # update, extend by index order
-                idx = [id1, id2, id3].sort()
+                idx = [id1, id2, id3]
+                idx.sort()
                 face.extend(vert[idx[0]])
                 face.extend(vert[idx[1]])
                 face.extend(vert[idx[2]])
                 data.append(face)
+    dim[0] = len(data)
+    dim[1] = len(vert)
     batch_data.append(data)
+    return dim
 
 
 # convert result from NN to obj

@@ -6,33 +6,33 @@ import numpy as np
 from keras import utils
 from keras import regularizers
 from keras.models import Sequential, Model, load_model
-from keras.layers import Input, Dense, Dropout, Flatten
+from keras.layers import Input, Dense, Lambda, merge, multiply
 from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
-from m_layers import Smooth, Densepool
-from util import face2mtx, obj2tri, tri2obj
+from m_layers import Smooth, Densepool, compressmtx
+from util import face2mtx, obj2tri, tri2obj, write_obj
 
 
-def setmodel(input_dim, mtx):
-    # 1 model_1 subdivide & pooling
-    # mesh_in = Input((input_dim, 9))
-    # smoo = Smooth(input_shape=(input_dim,9), activation='relu', name='smoo_layer')(mesh_in) 
-    model_1 = Sequential()
-    model_1.add(Smooth(input_shape=(input_dim,9), activation='relu', name='smoo_layer'))
-    model_1.add(Densepool(kernel_initializer=pooling_kernal_init(mtx)))
+def setmodel(input_shape, mtx):
+    # 1 subdivide & pooling
+    mesh_in = Input((input_shape[0],9))
+    smoo = Smooth(activation='relu', name='smoo_layer')(mesh_in)
+    pool = Densepool(mtx=mtx, output_dim=input_shape[1])(smoo)
+    # model_1.add(Smooth(input_shape=(input_shape[0],9), activation='relu', name='smoo_layer'))
+    # model_1.add(Densepool(mtx=mtx, output_dim=input_shape[1]))
+    # model_1.layers[1].trainable = False
     
-    # 2 model_2 
-    mode_2 = Sequential()
-    model_2.add(Lambda(lambda face_mtx: [1.0/float(x) for x in K.sum(face_mtx, axis=1)]))
+    # 2  
+    mtx_in = Input((input_shape))
+    mtx_1d = Lambda(compressmtx, output_shape=[input_shape[1]])(mtx_in)   
 
-    # merges
-    merged = Merge([model_1, model_2], mode='multiply')
+    print "><><><><><> merge layer..."
+    # merge layer
+    merged = multiply([pool, mtx_1d]) 
 
     # model
-    # model = Model(inputs=[mesh_in, face_mtx], outputs=[output])
-    model = Sequential()
-    model.add(merged)
+    model = Model(inputs=[mesh_in, mtx_in], outputs=[merged])
     model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
 
     print "set model and compile"
@@ -114,7 +114,7 @@ def main():
     fineDir = args.f
     test_coarseDir = args.tc
     test_fineDir = args.tf
-    print type(coarseDir)
+
     print "training dataset: "
     print ">>>  " + coarseDir + "  >>>  " + fineDir
     print "test dataset: "
@@ -127,15 +127,10 @@ def main():
             model.load_weights('my_model_weights.h5')
     else:
         # load any file to get triangle dimention
-        batch_data = []
-        file_name = os.listdir(coarseDir)[0] + "00000_00.obj"
-        obj2tri(file_name, batch_data)
-        dim = len(batch_data[0])
-        mtx = face2mtx(objfile, f_dim)
-        # debug
-        print len(mtx)
-        print len(mtx[0])
-
+        sample_data = []
+        file_name = coarseDir + [ f for f in os.listdir(coarseDir) if not f.startswith('.')][0] + "/00001_00.obj"
+        dim = obj2tri(file_name, sample_data)   # [tri_dim, vert_dim]
+        mtx = face2mtx(file_name, dim)
         # create model
         model = setmodel(dim, mtx)
         x_train = np.empty(0)

@@ -101,15 +101,9 @@ def obj2tri(file_name, batch_data):
                 id1 = int(s[1].strip().split('/')[0]) - 1  # index start at 1
                 id2 = int(s[2].strip().split('/')[0]) - 1
                 id3 = int(s[3].strip().split('/')[0]) - 1
-                # face.extend(vert[id1])
-                # face.extend(vert[id2])
-                # face.extend(vert[id3])
-                # update, extend by index order
-                idx = [id1, id2, id3]
-                idx.sort()
-                face.extend(vert[idx[0]])
-                face.extend(vert[idx[1]])
-                face.extend(vert[idx[2]])
+                face.extend(vert[id1])
+                face.extend(vert[id2])
+                face.extend(vert[id3])
                 data.append(face)
     dim[0] = len(data)
     dim[1] = len(vert)

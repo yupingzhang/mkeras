@@ -80,14 +80,10 @@ class Densepool(Layer):
     def __init__(self, 
                  mtx,
                  mtx_1,
-                 input_dim,
-                 output_dim,
                  activation=None,
                  **kwargs):
         self.mtx = mtx
         self.mtx_1 = mtx_1
-        self.input_dim = input_dim
-        self.output_dim = output_dim
         self.activation = activations.get(activation)
         self.trainable = False
         super(Densepool, self).__init__(**kwargs)
@@ -99,17 +95,20 @@ class Densepool(Layer):
         super(Densepool, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        print ">>>>>> Densepool input >>> "
-        flat_input = K.reshape(input, (self.input_dim * 3, 3))
-        print K.int_shape(flat_input)      # 1292 * 9
+        print ">>>>>> Densepool >>> "
+        dim = K.int_shape(input)
+        flat_input = K.reshape(input, (-1, dim[1] * 3, 3))
+        # flat_input = K.permute_dimensions(flat_input, (1, 2, 0))
+        print K.int_shape(flat_input)      # None, 3876, 3
         
-        mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')   # (1292 * 3) x 700 
+        mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')   # 700 x 3876
         print K.int_shape(mtx_tensor)    
 
-        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))   # (1292 * 3) x 700 
+        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))   # 3876 x 700 
         print K.int_shape(mtx_1_tensor)                
 
-        new_pos = K.dot(mtx_tensor, flat_input)
+        pos = K.dot(mtx_tensor, flat_input)
+        new_pos = K.permute_dimensions(pos, (2, 0, 1))
         print "new_pos shape >>> "
         print K.int_shape(new_pos)  
 
@@ -117,7 +116,9 @@ class Densepool(Layer):
         print "output shape >>> "
         print K.int_shape(output) 
 
-        output = K.reshape(output, (-1, 3, 3))
+        s = K.int_shape(output)
+        output = K.reshape(output, (-1, s[0]/3, 9))
+        print K.int_shape(output) 
         
         if self.activation is not None:
             return self.activation(output)
@@ -127,16 +128,5 @@ class Densepool(Layer):
     def compute_output_shape(self, input_shape):
         return input_shape
 
-
-# 1.0/count
-def compressmtx(face_mtx):
-    c = [1.0/float(x) for x in K.sum(face_mtx, axis=1)]
-
-    print "face_mtx shape >>> "
-    print face_mtx.shape
-    print "c shape >>> "
-    print c.size
-
-    return c
 
 

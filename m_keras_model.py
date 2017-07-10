@@ -10,15 +10,15 @@ from keras.layers import Input, Dense, Lambda, merge, multiply
 from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
-from m_layers import Smooth, Densepool, compressmtx
+from m_layers import Smooth, Densepool
 from util import obj_parser, face2mtx, obj2tri, tri2obj, write_obj
 
 
 def setmodel(input_shape, mtx, mtx_1):
     # 1 subdivide & pooling
-    mesh_in = Input((input_shape[0],9), name='mesh_input')
+    mesh_in = Input((input_shape[0], 9), name='mesh_input')
     smoo = Smooth(units=3, name='smoo_layer')(mesh_in)       # activation='relu', 
-    pool = Densepool(mtx=mtx, mtx_1=mtx_1, input_dim=input_shape[0], output_dim=input_shape[1], name='pool_layer')(smoo)
+    pool = Densepool(mtx=mtx, mtx_1=mtx_1, name='pool_layer')(smoo)
     
     # model
     model = Model(inputs=[mesh_in], outputs=[pool])
@@ -33,28 +33,34 @@ def setmodel(input_shape, mtx, mtx_1):
 # extend dataset x y
 def load_data(path_coarse, path_tracking):
     batch_coarse = []
-    vert_coarse = []
-    vert_fine = []
-    vert_delta = []
+    batch_fine = []
+    # vert_coarse = []
+    # vert_fine = []
+    # vert_delta = []
 
     for x in xrange(1,101):
         file_name = str(x).zfill(5) + '_00.obj'
         coarse_file = path_coarse + '/' + file_name
         fine_file = path_tracking + '/' + file_name
         obj2tri(coarse_file, batch_coarse)
-        # obj2tri(fine_file, batch_fine)
-        obj_parser(coarse_file, vert_coarse)
-        obj_parser(fine_file, vert_fine)
+        obj2tri(fine_file, batch_fine)
+        # obj_parser(coarse_file, vert_coarse)
+        # obj_parser(fine_file, vert_fine)
         
     # Trains the model for a fixed number of epochs (iterations on a dataset).
     x_train = np.array(batch_coarse) 
-    
-    for i in range(len(vert_fine)):
-        y_row = np.array(vert_fine[i]) - np.array(vert_coarse[i])
-        vert_delta.append(y_row)
-    y_target = np.array(vert_delta)
+    y_list = []
+    for i in range(len(batch_fine)):
+        y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
+        y_list.append(y_row)
+    y_train = np.array(y_list)
+
+    # for i in range(len(vert_fine)):
+    #     y_row = np.array(vert_fine[i]) - np.array(vert_coarse[i])
+    #     vert_delta.append(y_row)
+    # y_target = np.array(vert_delta)
   
-    return x_train, y_target
+    return x_train, y_train
 
 
 def train(model, x_train, y_train):

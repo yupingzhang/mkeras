@@ -14,11 +14,11 @@ from m_layers import Smooth, Densepool, compressmtx
 from util import obj_parser, face2mtx, obj2tri, tri2obj, write_obj
 
 
-def setmodel(input_shape, mtx):
+def setmodel(input_shape, mtx, mtx_1):
     # 1 subdivide & pooling
     mesh_in = Input((input_shape[0],9), name='mesh_input')
-    smoo = Smooth(activation='relu', name='smoo_layer')(mesh_in)
-    pool = Densepool(mtx=mtx, output_dim=input_shape[1], name='pool_layer')(smoo)
+    smoo = Smooth(units=3, name='smoo_layer')(mesh_in)       # activation='relu', 
+    pool = Densepool(mtx=mtx, mtx_1=mtx_1, input_dim=input_shape[0], output_dim=input_shape[1], name='pool_layer')(smoo)
     
     # model
     model = Model(inputs=[mesh_in], outputs=[pool])
@@ -58,6 +58,7 @@ def load_data(path_coarse, path_tracking):
 
 
 def train(model, x_train, y_train):
+    print ">>>>>>> train model..."
     history = model.fit(x_train, y_train, batch_size=32, epochs=20)
     print(history.history.keys())
 
@@ -117,9 +118,9 @@ def main():
         sample_data = []
         file_name = coarseDir + [ f for f in os.listdir(coarseDir) if not f.startswith('.')][0] + "/00001_00.obj"
         dim = obj2tri(file_name, sample_data)   # [tri_dim, vert_dim]
-        mtx = face2mtx(file_name, dim)
+        mtx, mtx_1 = face2mtx(file_name, dim)
         # create model
-        model = setmodel(dim, mtx)
+        model = setmodel(dim, mtx, mtx_1)
         x_train = np.empty(0)
         y_train = np.empty(0)
         x_test = np.empty(0)
@@ -146,9 +147,6 @@ def main():
             print "Error: no input training data."
             return 0
 
-        print ">>>>>>> train model..."
-        print x_train.shape
-        print y_train.shape
         train(model, x_train, y_train)
 
         print 'load test data to evaluate...'

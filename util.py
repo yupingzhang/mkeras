@@ -19,30 +19,41 @@ def custom(x):
     return x
 
 
-# face index to one-hot matrix
+# face index to index matrix
 def face2mtx(objfile, dim):
     if not os.path.isfile(objfile):
         print "file not exist"
         return
     
-    mtx = np.array([np.zeros((dim[1], 3)) for item in range(dim[0])])
+    mtx = np.array([np.zeros(dim[0]*3) for item in range(dim[1])])
+    count = np.zeros((dim[1], 1))
+    print ">>> mtx shape: "
+    print mtx.shape
     tri_id = 0
 
     with open(objfile, "r") as f1:
         for line in f1:
             s = line.strip().split(' ')
             if s[0] == 'f':
-                id1 = int(s[1].strip().split('/')[0]) - 1  # index start at 1
+                id1 = int(s[1].strip().split('/')[0]) - 1  # index start at 0
                 id2 = int(s[2].strip().split('/')[0]) - 1
                 id3 = int(s[3].strip().split('/')[0]) - 1
                 #TODO
                 # set the weight as 1
-                mtx[tri_id][id1] = [1, 0, 0]
-                mtx[tri_id][id2] = [0, 1, 0]
-                mtx[tri_id][id3] = [0, 0, 1]
+                mtx[id1][tri_id * 3] = 1
+                mtx[id2][tri_id*3+1] = 1
+                mtx[id3][tri_id*3+2] = 1
                 tri_id = tri_id + 1
 
-    return mtx
+                count[id1][0] += 1.0
+                count[id2][0] += 1.0
+                count[id3][0] += 1.0
+    print ">>> count.shape: "
+    print count.shape
+    mtx_1 = mtx
+    mtx = mtx_1 / count
+
+    return mtx, mtx_1
 
 
 # load data to (pos vel) 6N dimention

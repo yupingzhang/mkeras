@@ -10,6 +10,7 @@ from keras import constraints
 class Smooth(Layer):
 
     def __init__(self, 
+                 units,
                  activation=None,
                  use_bias=True,
                  kernel_initializer='uniform',
@@ -34,8 +35,8 @@ class Smooth(Layer):
         super(Smooth, self).__init__(**kwargs)
 
     def build(self, input_shape):
-    	if input_shape is None:
-        	raise RuntimeError('specify input shape')
+        if input_shape is None:
+            raise RuntimeError('specify input shape')
         
         # print "building smooth layer: input shape:"
         # print input_shape
@@ -45,10 +46,24 @@ class Smooth(Layer):
                                       initializer='uniform',
                                       trainable=True)
 
+        # self.W = []
+        # for x in xrange(1,units):
+        #     self.W[x] = self.add_weight(name='weight_1',
+        #                               shape=(9, 9),
+        #                               initializer='uniform',
+        #                               trainable=True)
+
         super(Smooth, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
         output = K.dot(input, self.kernel)
+        # output = K.dot(input, self.W[0])
+        # for x in xrange(1,units):
+        #     ...
+
+
+        # print ">>>>>> smooth output shape: "
+        # print K.int_shape(output)
         
         if self.activation is not None:
             return self.activation(output)
@@ -64,10 +79,14 @@ class Densepool(Layer):
 
     def __init__(self, 
                  mtx,
+                 mtx_1,
+                 input_dim,
                  output_dim,
                  activation=None,
                  **kwargs):
         self.mtx = mtx
+        self.mtx_1 = mtx_1
+        self.input_dim = input_dim
         self.output_dim = output_dim
         self.activation = activations.get(activation)
         self.trainable = False
@@ -80,23 +99,25 @@ class Densepool(Layer):
         super(Densepool, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        # print "Densepool input >>> "
-        dim = K.int_shape(input)
-        print "Densepool mtx   >>> " 
-        print self.mtx.shape
-        weight = K.variable(value=self.mtx, name='pooling_kernal')
-        print "Densepool weight variable >>> "
-        print K.int_shape(weight)
+        print ">>>>>> Densepool input >>> "
+        flat_input = K.reshape(input, (self.input_dim * 3, 3))
+        print K.int_shape(flat_input)      # 1292 * 9
+        
+        mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')   # (1292 * 3) x 700 
+        print K.int_shape(mtx_tensor)    
 
-        # output = K.transpose(input) * K.variable(value=self.mtx, name='pooling_kernal')   # multiply (element-wise) 
-        #TODO
-        tri = K.reshape(input, (dim[1], 3, 3))
-        mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')
-        print "mtx_tensor shape >>> "
-        print K.int_shape(mtx_tensor)
-        output = K.sum(mtx_tensor, axis=0)
+        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))   # (1292 * 3) x 700 
+        print K.int_shape(mtx_1_tensor)                
+
+        new_pos = K.dot(mtx_tensor, flat_input)
+        print "new_pos shape >>> "
+        print K.int_shape(new_pos)  
+
+        output = K.dot(mtx_1_tensor, new_pos)  
         print "output shape >>> "
-        print K.int_shape(output)
+        print K.int_shape(output) 
+
+        output = K.reshape(output, (-1, 3, 3))
         
         if self.activation is not None:
             return self.activation(output)
@@ -104,7 +125,7 @@ class Densepool(Layer):
             return output
 
     def compute_output_shape(self, input_shape):
-        return (input_shape[0], self.output_dim, 3)
+        return input_shape
 
 
 # 1.0/count

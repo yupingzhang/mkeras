@@ -21,6 +21,7 @@ class Smooth(Layer):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
+        self.units = units
         self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -38,32 +39,24 @@ class Smooth(Layer):
         if input_shape is None:
             raise RuntimeError('specify input shape')
         
-        # print "building smooth layer: input shape:"
-        # print input_shape
-        # Create a trainable weight variable for this layer.
-        self.kernel = self.add_weight(name='kernel',
+        # Create trainable weight variable for this layer.
+        # self.W = self.add_weight(name='weights',
+        #                               shape=(self.units, 9, 9),
+        #                               initializer='uniform',
+        #                               trainable=True)
+
+        self.W = self.add_weight(name='weights',
                                       shape=(9, 9),
                                       initializer='uniform',
                                       trainable=True)
 
-        # self.W = []
-        # for x in xrange(1,units):
-        #     self.W[x] = self.add_weight(name='weight_1',
-        #                               shape=(9, 9),
-        #                               initializer='uniform',
-        #                               trainable=True)
-
         super(Smooth, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        output = K.dot(input, self.kernel)
-        # output = K.dot(input, self.W[0])
-        # for x in xrange(1,units):
-        #     ...
-
-
-        # print ">>>>>> smooth output shape: "
-        # print K.int_shape(output)
+        output = K.dot(input, self.W)        
+        # output = K.sum(output, axis=2)
+        print ">>>>>> smooth output shape: "
+        print K.int_shape(output)
         
         if self.activation is not None:
             return self.activation(output)

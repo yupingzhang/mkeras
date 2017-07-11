@@ -3,64 +3,35 @@ import os, sys
 import os.path
 import operator
 import numpy as np 
+from keras import backend as K
 from keras import utils
 from keras import regularizers
 from keras.models import Sequential, Model, load_model
-from keras.layers import Input, Dense, Lambda, merge, multiply
+from keras.layers import Input, Dense, Lambda, merge, multiply, add
 from keras.layers import Activation, Embedding
 from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
 from m_layers import Smooth, Densepool
-from util import obj_parser, face2mtx, obj2tri, tri2obj, write_obj
+from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, custom_add
 
 
 def setmodel(input_shape, mtx, mtx_1):
     # 1 subdivide & pooling
     mesh_in = Input((input_shape[0], 9), name='mesh_input')
-    smoo = Smooth(units=3, name='smoo_layer')(mesh_in)       # activation='relu', 
-    pool = Densepool(mtx=mtx, mtx_1=mtx_1, name='pool_layer')(smoo)
+    smoo_1 = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
+    output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
+
+    # output = Smooth(units=9, name='smoo_layer_2')(smoo_1)
+    # output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_2')(smoo_2)
     
     # model
-    model = Model(inputs=[mesh_in], outputs=[pool])
+    model = Model(inputs=[mesh_in], outputs=[output])
     model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
 
     print "set model and compile"
     model.summary()
 
     return model
-
-
-# extend dataset x y
-def load_data(path_coarse, path_tracking):
-    batch_coarse = []
-    batch_fine = []
-    # vert_coarse = []
-    # vert_fine = []
-    # vert_delta = []
-
-    for x in xrange(1,101):
-        file_name = str(x).zfill(5) + '_00.obj'
-        coarse_file = path_coarse + '/' + file_name
-        fine_file = path_tracking + '/' + file_name
-        obj2tri(coarse_file, batch_coarse)
-        obj2tri(fine_file, batch_fine)
-        # obj_parser(coarse_file, vert_coarse)
-        # obj_parser(fine_file, vert_fine)
-        
-    # Trains the model for a fixed number of epochs (iterations on a dataset).
-    x_train = np.array(batch_coarse) 
-    y_list = []
-    for i in range(len(batch_fine)):
-        y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
-        y_list.append(y_row)
-    y_train = np.array(y_list)
-
-    # for i in range(len(vert_fine)):
-    #     y_row = np.array(vert_fine[i]) - np.array(vert_coarse[i])
-    #     vert_delta.append(y_row)
-    # y_target = np.array(vert_delta)
-  
-    return x_train, y_train
 
 
 def train(model, x_train, y_train):
@@ -72,17 +43,21 @@ def train(model, x_train, y_train):
 def eval(model, x_test, y_target):
     # evaluate the model
     scores = model.evaluate(x_test, y_target, batch_size=32)
-    print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+    print("Evaluate: \n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
 
 
 # Generates output predictions for the input samples.
-def pred(x, v_dim, obj_in, obj_out):
-    print "load pre-trained model..."
-    model = load_model('my_model.h5')
-    model.load_weights('my_model_weights.h5')
+def pred(model, x, v_dim, obj_in, obj_out):
+    print ">>> Predict "+ obj_in + " >>> " + obj_out
+    # model = load_model('my_model.h5')
+    # model.load_weights('my_model_weights.h5')
     y = model.predict(x, batch_size=32)
+    print y.shape
+    y = y + x
     # save the output data
-    tri2obj(y, v_dim, obj_in, obj_out)
+    for i in xrange(0,100):
+        filename = str(i+1).zfill(5) + '_00.obj'
+        tri2obj(y[i], v_dim, obj_in, obj_out + filename)
 
 
 def save(model):
@@ -114,6 +89,7 @@ def main():
     print "test dataset: "
     print ">>>  " + test_coarseDir + "  >>>  " + test_fineDir
 
+    v_dim = 0
     if args.resume and args.modelh5:
         print "resume trained model..."
         model = load_model('my_model.h5')
@@ -124,6 +100,7 @@ def main():
         sample_data = []
         file_name = coarseDir + [ f for f in os.listdir(coarseDir) if not f.startswith('.')][0] + "/00001_00.obj"
         dim = obj2tri(file_name, sample_data)   # [tri_dim, vert_dim]
+        v_dim = dim[1]
         mtx, mtx_1 = face2mtx(file_name, dim)
         # create model
         model = setmodel(dim, mtx, mtx_1)
@@ -174,6 +151,32 @@ def main():
         eval(model, x_test, y_test)
 
     save(model)
+
+    print ">>> weights: >>>> "
+    weights = model.layers[1].get_weights()
+    print weights
+
+    # predict and save output to obj
+    #TODO
+    out_dir = 'apredict/'
+    pred_dir = test_coarseDir
+    
+    for dirName, subdirList, fileList in os.walk(pred_dir):
+        for subdir in subdirList:
+            newpath = out_dir + subdir
+            print newpath
+            if not os.path.exists(newpath):
+                os.makedirs(newpath)
+
+            obj_in = pred_dir + subdir + '/00001_00.obj'
+            batch_coarse = []
+            for dirpath, dirnames, filenames in os.walk(pred_dir + subdir):
+                for file in filenames:
+                    obj2tri(pred_dir + subdir + '/' + file, batch_coarse)
+                    
+            x = np.array(batch_coarse)    
+            pred(model, x, v_dim, obj_in, out_dir + subdir + '/')
+    
 
 
 if __name__ == "__main__":

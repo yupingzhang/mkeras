@@ -12,11 +12,32 @@ def to_list(x):
     return [x]
 
 
-def custom(x):
-    #e = K.exp(x)
-    #s = K.sum(e, axis=-1, keepdims=True)
-    #return e / s
-    return x
+# x y must be in same dimention
+def custom_add(x, y):
+    return x + y
+
+
+# extend dataset x y
+def load_data(path_coarse, path_tracking):
+    batch_coarse = []
+    batch_fine = []
+    
+    for x in xrange(1,101):
+        file_name = str(x).zfill(5) + '_00.obj'
+        coarse_file = path_coarse + '/' + file_name
+        fine_file = path_tracking + '/' + file_name
+        obj2tri(coarse_file, batch_coarse)
+        obj2tri(fine_file, batch_fine)
+        
+    # Trains the model for a fixed number of epochs (iterations on a dataset).
+    x_train = np.array(batch_coarse) 
+    y_list = []
+    for i in range(len(batch_fine)):
+        y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
+        y_list.append(y_row)
+    y_train = np.array(y_list)
+  
+    return x_train, y_train
 
 
 # face index to index matrix
@@ -133,26 +154,25 @@ def tri2obj(input, v_dim, obj_in, obj_out):
                 id1 = int(s[1].strip().split('/')[0]) - 1  # index start at 1
                 id2 = int(s[2].strip().split('/')[0]) - 1
                 id3 = int(s[3].strip().split('/')[0]) - 1
-                # put vertex position into 'vertices'
-                print input[tri_id][0:3]
                 vertices[id1] = input[tri_id][0:3]
                 vertices[id2] = input[tri_id][3:6]
                 vertices[id3] = input[tri_id][6:9]
+                tri_id = tri_id + 1
                 # copy the face info
                 faces.append(line)
 
     # check
-    print len(faces)
-    print vertices.shape
+    # print len(faces)       #1292
+    # print vertices.shape   #700,3
     if vertices.shape == 0:
         print "Error: vertices.shape=0"
 
     # write to new file
     with open(obj_out, "w+") as f2:
-        for x in range(vertices.shape):
-            line = "{} {} {}\n".format(vertices[x][0], vertices[x][1], vertices[x][2])
+        for x in range(v_dim):
+            line = "v {} {} {}\n".format(vertices[x][0], vertices[x][1], vertices[x][2])
             f2.write(line)
-        for face in range(len(faces)):
+        for face in faces:
             f2.write(face)
 
 

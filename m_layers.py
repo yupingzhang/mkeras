@@ -47,7 +47,7 @@ class Smooth(Layer):
 
         self.W = self.add_weight(name='weights',
                                       shape=(9, 9),
-                                      initializer='uniform',
+                                      initializer='zeros',
                                       trainable=True)
 
         super(Smooth, self).build(input_shape)  # Be sure to call this somewhere!

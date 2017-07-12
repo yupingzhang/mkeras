@@ -36,7 +36,7 @@ def load_data(path_coarse, path_tracking):
         y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
         y_list.append(y_row)
     y_train = np.array(y_list)
-  
+
     return x_train, y_train
 
 
@@ -107,6 +107,10 @@ def obj2tri(file_name, batch_data):
     if not os.path.isfile(file_name):
         print file_name + " file not exist"
         return
+    if not file_name.endswith('.obj'):
+        print file_name + " Wrong file format, expect obj."
+        return
+
     vert = []
     data = []
     dim = [0, 0]

@@ -18,8 +18,8 @@ from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, c
 def setmodel(input_shape, mtx, mtx_1):
     # 1 subdivide & pooling
     mesh_in = Input((input_shape[0], 9), name='mesh_input')
-    smoo_1 = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
-    output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
+    output = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
+    # output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
 
     # output = Smooth(units=9, name='smoo_layer_2')(smoo_1)
     # output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_2')(smoo_2)
@@ -51,6 +51,8 @@ def pred(model, x, v_dim, obj_in, obj_out):
     print ">>> Predict "+ obj_in + " >>> " + obj_out
     # model = load_model('my_model.h5')
     # model.load_weights('my_model_weights.h5')
+    print v_dim
+    print x.shape
     y = model.predict(x, batch_size=32)
     print y.shape
     y = y + x
@@ -71,18 +73,32 @@ def main():
     parser.add_argument('--f', help="training: fine scale with track dir")
     parser.add_argument('--tc', help="test dataset: coarse dir")
     parser.add_argument('--tf', help="test dataset: fine scale with track dir")
+    parser.add_argument('--x', help="predict input dataset dir") 
+    parser.add_argument('--o', help="predict output dir") 
     parser.add_argument("--resume", help="bool flag, False by default")
     parser.add_argument("--modelh5", help="load exist model")
     parser.add_argument("--modelweighth5", help="load model weights")
     args = parser.parse_args()
     if len(sys.argv) < 4:
-        print "Usage: --c=coarse_dir --f=tracking_dir --tc=test_coarse --tf=test_tracking optional* --> use --help"
+        print "Usage: --c=coarse_dir --f=tracking_dir optional* --> use --help"
         return 0
 
     coarseDir = args.c
     fineDir = args.f
-    test_coarseDir = args.tc
-    test_fineDir = args.tf
+    test_coarseDir = args.c
+    test_fineDir = args.f
+    pred_dir = args.c
+    out_dir = 'apredict/'
+    if args.tc and args.tf:
+        test_coarseDir = args.tc
+        test_fineDir = args.tf
+    if args.x:
+        pred_dir = args.x
+    if args.o:
+        out_dir = args.o
+        if not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+    
 
     print "training dataset: "
     print ">>>  " + coarseDir + "  >>>  " + fineDir
@@ -90,8 +106,8 @@ def main():
     print ">>>  " + test_coarseDir + "  >>>  " + test_fineDir
 
     v_dim = 0
-    if args.resume and args.modelh5:
-        print "resume trained model..."
+    if args.modelh5:
+        print "load trained model..."
         model = load_model('my_model.h5')
         if args.modelweighth5:
             model.load_weights('my_model_weights.h5')
@@ -132,23 +148,23 @@ def main():
 
         train(model, x_train, y_train)
 
-        print 'load test data to evaluate...'
-        for dirName, subdirList, fileList in os.walk(test_coarseDir):
-            for subdir in subdirList:
-                print('Found directory: %s' % subdir)
-                x, y = load_data(test_coarseDir + subdir, test_fineDir + subdir)
-                if x_test.size == 0:
-                    x_test = x
-                    y_test = y
-                else:
-                    x_test = np.vstack((x_test, x))
-                    y_test = np.vstack((y_test, y))
+        # print 'load test data to evaluate...'
+        # for dirName, subdirList, fileList in os.walk(test_coarseDir):
+        #     for subdir in subdirList:
+        #         print('Found directory: %s' % subdir)
+        #         x, y = load_data(test_coarseDir + subdir, test_fineDir + subdir)
+        #         if x_test.size == 0:
+        #             x_test = x
+        #             y_test = y
+        #         else:
+        #             x_test = np.vstack((x_test, x))
+        #             y_test = np.vstack((y_test, y))
 
-        if x_test.size == 0:
-            print "Error: Need test dataset."
-            return 0
+        # if x_test.size == 0:
+        #     print "Error: Need test dataset."
+        #     return 0
         
-        eval(model, x_test, y_test)
+        # eval(model, x_test, y_test)
 
     save(model)
 
@@ -157,9 +173,6 @@ def main():
     print weights
 
     # predict and save output to obj
-    #TODO
-    out_dir = 'apredict/'
-    pred_dir = test_coarseDir
     
     for dirName, subdirList, fileList in os.walk(pred_dir):
         for subdir in subdirList:
@@ -167,17 +180,16 @@ def main():
             print newpath
             if not os.path.exists(newpath):
                 os.makedirs(newpath)
-
             obj_in = pred_dir + subdir + '/00001_00.obj'
             batch_coarse = []
             for dirpath, dirnames, filenames in os.walk(pred_dir + subdir):
-                for file in filenames:
-                    obj2tri(pred_dir + subdir + '/' + file, batch_coarse)
+                for x in xrange(1,101):
+                    file_name = str(x).zfill(5) + '_00.obj'
+                    obj2tri(pred_dir + subdir + '/' + file_name, batch_coarse)
                     
-            x = np.array(batch_coarse)    
+            x = np.array(batch_coarse)   
             pred(model, x, v_dim, obj_in, out_dir + subdir + '/')
     
-
 
 if __name__ == "__main__":
     main()

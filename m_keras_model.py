@@ -18,7 +18,13 @@ from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, c
 def setmodel(input_shape, mtx, mtx_1):
     # 1 subdivide & pooling
     mesh_in = Input((input_shape[0], 9), name='mesh_input')
-    output = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
+    # load predefined weights
+    array = np.array([])
+    smoo_layer = Smooth(units=3, name='smoo_layer_1')
+    smoo_layer.trainable = False
+    output = smoo_layer(mesh_in)
+
+    # output = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
     # output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
 
     # output = Smooth(units=9, name='smoo_layer_2')(smoo_1)
@@ -69,6 +75,9 @@ def save(model):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--train', help="train flag")
+    parser.add_argument('--eval', help="evaluate flag")
+    parser.add_argument('--pred', help="predict flag")
     parser.add_argument('--c', help="training: coarse dir")
     parser.add_argument('--f', help="training: fine scale with track dir")
     parser.add_argument('--tc', help="test dataset: coarse dir")
@@ -83,18 +92,21 @@ def main():
         print "Usage: --c=coarse_dir --f=tracking_dir optional* --> use --help"
         return 0
 
-    coarseDir = args.c
-    fineDir = args.f
-    test_coarseDir = args.c
-    test_fineDir = args.f
-    pred_dir = args.c
-    out_dir = 'apredict/'
-    if args.tc and args.tf:
+    coarseDir = None
+    fineDir = None
+    test_coarseDir = None
+    test_fineDir = None
+    pred_dir = None
+    out_dir = None
+
+    if args.train:
+        coarseDir = args.c
+        fineDir = args.f
+    if args.eval:
         test_coarseDir = args.tc
         test_fineDir = args.tf
-    if args.x:
+    if args.pred:
         pred_dir = args.x
-    if args.o:
         out_dir = args.o
         if not os.path.exists(out_dir):
                 os.makedirs(out_dir)
@@ -120,6 +132,8 @@ def main():
         mtx, mtx_1 = face2mtx(file_name, dim)
         # create model
         model = setmodel(dim, mtx, mtx_1)
+
+    if args.train:    
         x_train = np.empty(0)
         y_train = np.empty(0)
         x_test = np.empty(0)
@@ -148,6 +162,7 @@ def main():
 
         train(model, x_train, y_train)
 
+    if args.eval:
         # print 'load test data to evaluate...'
         # for dirName, subdirList, fileList in os.walk(test_coarseDir):
         #     for subdir in subdirList:
@@ -173,22 +188,22 @@ def main():
     print weights
 
     # predict and save output to obj
-    
-    for dirName, subdirList, fileList in os.walk(pred_dir):
-        for subdir in subdirList:
-            newpath = out_dir + subdir
-            print newpath
-            if not os.path.exists(newpath):
-                os.makedirs(newpath)
-            obj_in = pred_dir + subdir + '/00001_00.obj'
-            batch_coarse = []
-            for dirpath, dirnames, filenames in os.walk(pred_dir + subdir):
-                for x in xrange(1,101):
-                    file_name = str(x).zfill(5) + '_00.obj'
-                    obj2tri(pred_dir + subdir + '/' + file_name, batch_coarse)
-                    
-            x = np.array(batch_coarse)   
-            pred(model, x, v_dim, obj_in, out_dir + subdir + '/')
+    if args.pred:
+        for dirName, subdirList, fileList in os.walk(pred_dir):
+            for subdir in subdirList:
+                newpath = out_dir + subdir
+                print newpath
+                if not os.path.exists(newpath):
+                    os.makedirs(newpath)
+                obj_in = pred_dir + subdir + '/00001_00.obj'
+                batch_coarse = []
+                for dirpath, dirnames, filenames in os.walk(pred_dir + subdir):
+                    for x in xrange(1,101):
+                        file_name = str(x).zfill(5) + '_00.obj'
+                        obj2tri(pred_dir + subdir + '/' + file_name, batch_coarse)
+                        
+                x = np.array(batch_coarse)   
+                pred(model, x, v_dim, obj_in, out_dir + subdir + '/')
     
 
 if __name__ == "__main__":

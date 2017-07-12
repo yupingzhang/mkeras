@@ -11,6 +11,7 @@ class Smooth(Layer):
 
     def __init__(self, 
                  units,
+                 weights=None,    # predefined weights
                  activation=None,
                  use_bias=True,
                  kernel_initializer='uniform',
@@ -22,6 +23,7 @@ class Smooth(Layer):
                  bias_constraint=None,
                  **kwargs):
         self.units = units
+        self.weights = weights
         self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -44,8 +46,10 @@ class Smooth(Layer):
         #                               shape=(self.units, 9, 9),
         #                               initializer='uniform',
         #                               trainable=True)
-
-        self.W = self.add_weight(name='weights',
+        if self.weights is not None:
+            self.W = K.variable(value=self.weights, dtype='float32', name='predefined weights')
+        else:
+            self.W = self.add_weight(name='weights',
                                       shape=(9, 9),
                                       initializer='zeros',
                                       trainable=True)

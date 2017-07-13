@@ -48,8 +48,8 @@ def face2mtx(objfile, dim):
     
     mtx = np.array([np.zeros(dim[0]*3) for item in range(dim[1])])
     count = np.zeros((dim[1], 1))
-    print ">>> mtx shape: "
-    print mtx.shape
+    # print ">>> mtx shape: "
+    # print mtx.shape
     tri_id = 0
 
     with open(objfile, "r") as f1:
@@ -69,8 +69,7 @@ def face2mtx(objfile, dim):
                 count[id1][0] += 1.0
                 count[id2][0] += 1.0
                 count[id3][0] += 1.0
-    print ">>> count.shape: "
-    print count.shape
+    
     mtx_1 = mtx
     mtx = mtx_1 / count
 

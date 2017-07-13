@@ -11,10 +11,9 @@ class Smooth(Layer):
 
     def __init__(self, 
                  units,
-                 weights=None,    # predefined weights
                  activation=None,
                  use_bias=True,
-                 kernel_initializer='uniform',
+                 kernel_initializer=initializers.constant(0.8),
                  bias_initializer='zeros',
                  kernel_regularizer=None,
                  bias_regularizer=None,
@@ -23,7 +22,6 @@ class Smooth(Layer):
                  bias_constraint=None,
                  **kwargs):
         self.units = units
-        self.weights = weights
         self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
@@ -46,12 +44,10 @@ class Smooth(Layer):
         #                               shape=(self.units, 9, 9),
         #                               initializer='uniform',
         #                               trainable=True)
-        if self.weights is not None:
-            self.W = K.variable(value=self.weights, dtype='float32', name='predefined weights')
-        else:
-            self.W = self.add_weight(name='weights',
+        self.W = self.add_weight(name='weights',
                                       shape=(9, 9),
-                                      initializer='zeros',
+                                      initializer='random_normal',
+                                      # initializer=self.kernel_initializer,
                                       trainable=True)
 
         super(Smooth, self).build(input_shape)  # Be sure to call this somewhere!
@@ -59,17 +55,33 @@ class Smooth(Layer):
     def call(self, input):
         output = K.dot(input, self.W)        
         # output = K.sum(output, axis=2)
-        print ">>>>>> smooth output shape: "
-        print K.int_shape(output)
         
         if self.activation is not None:
             return self.activation(output)
         else:
             return output
 
-
     def compute_output_shape(self, input_shape):
         return input_shape     # not changing the dimensions
+
+    def get_config(self):
+        config = {
+            'units': self.units,
+            'activation': activations.serialize(self.activation),
+            'use_bias': self.use_bias,
+            'kernel_initializer': initializers.serialize(self.kernel_initializer),
+            'bias_initializer': initializers.serialize(self.bias_initializer),
+            'kernel_regularizer': regularizers.serialize(self.kernel_regularizer),
+            'bias_regularizer': regularizers.serialize(self.bias_regularizer),
+            'activity_regularizer': regularizers.serialize(self.activity_regularizer),
+            'kernel_constraint': constraints.serialize(self.kernel_constraint),
+            'bias_constraint': constraints.serialize(self.bias_constraint),
+            'is_placeholder': False
+        }
+
+        base_config = super(Smooth, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
 
 # a pool layer to pool values based on a dense weight matrix
 class Densepool(Layer):

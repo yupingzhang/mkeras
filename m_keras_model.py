@@ -9,7 +9,6 @@ from keras import regularizers
 from keras.models import Sequential, Model, load_model
 from keras.layers import Input, Dense, Lambda, merge, multiply, add
 from keras.layers import Activation, Embedding
-from keras.layers import Conv2D, MaxPooling2D
 from keras.optimizers import SGD
 from m_layers import Smooth, Densepool
 from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, custom_add
@@ -18,31 +17,26 @@ from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, c
 def setmodel(input_shape, mtx, mtx_1):
     # 1 subdivide & pooling
     mesh_in = Input((input_shape[0], 9), name='mesh_input')
-    # load predefined weights
-    array = np.array([])
-    smoo_layer = Smooth(units=3, name='smoo_layer_1')
-    smoo_layer.trainable = False
-    output = smoo_layer(mesh_in)
+    #smoo_layer = Smooth(units=3, name='smoo_layer_1')
+    #output = smoo_layer(mesh_in)
 
-    # output = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
-    # output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
+    smoo_1 = Smooth(units=3, name='smoo_layer_1')(mesh_in)       # activation='relu', 
+    pool_1 = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
 
-    # output = Smooth(units=9, name='smoo_layer_2')(smoo_1)
-    # output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_2')(smoo_2)
+    smoo_2 = Smooth(units=9, name='smoo_layer_2')(pool_1)
+    output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_2')(smoo_2)
     
     # model
     model = Model(inputs=[mesh_in], outputs=[output])
-    model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
-
-    print "set model and compile"
     model.summary()
-
     return model
 
 
 def train(model, x_train, y_train):
+    model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
+
     print ">>>>>>> train model..."
-    history = model.fit(x_train, y_train, batch_size=32, epochs=20)
+    history = model.fit(x_train, y_train, batch_size=32, epochs=200)
     print(history.history.keys())
 
 
@@ -71,25 +65,26 @@ def pred(model, x, v_dim, obj_in, obj_out):
 def save(model):
     model.save('my_model.h5') 
     model.save_weights('my_model_weights.h5')
+    del model
     
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train', help="train flag")
-    parser.add_argument('--eval', help="evaluate flag")
-    parser.add_argument('--pred', help="predict flag")
-    parser.add_argument('--c', help="training: coarse dir")
-    parser.add_argument('--f', help="training: fine scale with track dir")
-    parser.add_argument('--tc', help="test dataset: coarse dir")
-    parser.add_argument('--tf', help="test dataset: fine scale with track dir")
-    parser.add_argument('--x', help="predict input dataset dir") 
-    parser.add_argument('--o', help="predict output dir") 
-    parser.add_argument("--resume", help="bool flag, False by default")
-    parser.add_argument("--modelh5", help="load exist model")
-    parser.add_argument("--modelweighth5", help="load model weights")
+    parser.add_argument('-train', action='store_true', default=False, help="train flag")
+    parser.add_argument('-eval', action='store_true', default=False, help="evaluate flag")
+    parser.add_argument('-pred', action='store_true', default=False, help="predict flag")
+    parser.add_argument('-c', help="training: coarse dir")
+    parser.add_argument('-f', help="training: fine scale with track dir")
+    parser.add_argument('-tc', help="test dataset: coarse dir")
+    parser.add_argument('-tf', help="test dataset: fine scale with track dir")
+    parser.add_argument('-x', help="predict input dataset dir") 
+    parser.add_argument('-o', help="predict output dir") 
+    parser.add_argument("-resume", help="bool flag, False by default")
+    parser.add_argument("-modelh5", help="load exist model")
+    parser.add_argument("-modelweighth5", help="load model weights")
     args = parser.parse_args()
     if len(sys.argv) < 4:
-        print "Usage: --c=coarse_dir --f=tracking_dir optional* --> use --help"
+        print "Usage: --train=False --eval=False --pred=True option* --> use --help"
         return 0
 
     coarseDir = None
@@ -102,36 +97,53 @@ def main():
     if args.train:
         coarseDir = args.c
         fineDir = args.f
+        print "training dataset: "
+        print ">>>  " + str(coarseDir) + "  >>>  " + str(fineDir)
     if args.eval:
         test_coarseDir = args.tc
         test_fineDir = args.tf
+        print "evaluate dataset: "
+        print ">>>  " + str(test_coarseDir) + "  >>>  " + str(test_fineDir)
     if args.pred:
         pred_dir = args.x
         out_dir = args.o
         if not os.path.exists(out_dir):
                 os.makedirs(out_dir)
-    
-
-    print "training dataset: "
-    print ">>>  " + coarseDir + "  >>>  " + fineDir
-    print "test dataset: "
-    print ">>>  " + test_coarseDir + "  >>>  " + test_fineDir
+        print "predict: "
+        print ">>>  " + str(pred_dir) + "  >>>  " + str(out_dir)
 
     v_dim = 0
-    if args.modelh5:
-        print "load trained model..."
-        model = load_model('my_model.h5')
-        if args.modelweighth5:
-            model.load_weights('my_model_weights.h5')
-    else:
+    # model = None
+    # if args.modelh5:
+    #     print "load trained model..."
+    #     model = load_model('my_model.h5')
+    #     # load predefined weights
+    #     w = np.ones((9,9))
+    #     print ">>> predefined weights: "
+    #     print w
+    #     model.layers[0].set_weights(w)
+
+    #     # if args.modelweighth5:
+    #     #     model.load_weights('my_model_weights.h5')
+    # else:
         # load any file to get triangle dimention
-        sample_data = []
-        file_name = coarseDir + [ f for f in os.listdir(coarseDir) if not f.startswith('.')][0] + "/00001_00.obj"
-        dim = obj2tri(file_name, sample_data)   # [tri_dim, vert_dim]
-        v_dim = dim[1]
-        mtx, mtx_1 = face2mtx(file_name, dim)
-        # create model
-        model = setmodel(dim, mtx, mtx_1)
+  
+    sample_data = []
+    if coarseDir: sdir = coarseDir
+    elif test_coarseDir: sdir = test_coarseDir
+    elif pred_dir: sdir = pred_dir
+    file_name = sdir + [ f for f in os.listdir(sdir) if not f.startswith('.')][0] + "/00001_00.obj"
+    dim = obj2tri(file_name, sample_data)   # [tri_dim, vert_dim]
+    v_dim = dim[1]
+    mtx, mtx_1 = face2mtx(file_name, dim)
+    # create model
+    model = setmodel(dim, mtx, mtx_1)
+
+    # load predefined weights
+    # w = np.ones((1, 9, 9))
+    # print ">>> predefined weights: "
+    # print w
+    # model.layers[1].set_weights(w)
 
     if args.train:    
         x_train = np.empty(0)
@@ -163,25 +175,23 @@ def main():
         train(model, x_train, y_train)
 
     if args.eval:
-        # print 'load test data to evaluate...'
-        # for dirName, subdirList, fileList in os.walk(test_coarseDir):
-        #     for subdir in subdirList:
-        #         print('Found directory: %s' % subdir)
-        #         x, y = load_data(test_coarseDir + subdir, test_fineDir + subdir)
-        #         if x_test.size == 0:
-        #             x_test = x
-        #             y_test = y
-        #         else:
-        #             x_test = np.vstack((x_test, x))
-        #             y_test = np.vstack((y_test, y))
+        print 'load test data to evaluate...'
+        for dirName, subdirList, fileList in os.walk(test_coarseDir):
+            for subdir in subdirList:
+                print('Found directory: %s' % subdir)
+                x, y = load_data(test_coarseDir + subdir, test_fineDir + subdir)
+                if x_test.size == 0:
+                    x_test = x
+                    y_test = y
+                else:
+                    x_test = np.vstack((x_test, x))
+                    y_test = np.vstack((y_test, y))
 
-        # if x_test.size == 0:
-        #     print "Error: Need test dataset."
-        #     return 0
+        if x_test.size == 0:
+            print "Error: Need test dataset."
+            return 0
         
-        # eval(model, x_test, y_test)
-
-    save(model)
+        eval(model, x_test, y_test)
 
     print ">>> weights: >>>> "
     weights = model.layers[1].get_weights()
@@ -204,6 +214,8 @@ def main():
                         
                 x = np.array(batch_coarse)   
                 pred(model, x, v_dim, obj_in, out_dir + subdir + '/')
+
+    save(model)
     
 
 if __name__ == "__main__":

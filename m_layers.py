@@ -13,7 +13,7 @@ class Smooth(Layer):
                  units,
                  activation=None,
                  use_bias=True,
-                 kernel_initializer=initializers.constant(0.8),
+                 kernel_initializer='random_uniform',
                  bias_initializer='zeros',
                  kernel_regularizer=None,
                  bias_regularizer=None,
@@ -50,11 +50,22 @@ class Smooth(Layer):
                                       # initializer=self.kernel_initializer,
                                       trainable=True)
 
+        if self.use_bias:
+            self.bias = self.add_weight(shape=(9,),
+                                        initializer=self.bias_initializer,
+                                        name='bias',
+                                        regularizer=self.bias_regularizer,
+                                        constraint=self.bias_constraint)
+        else:
+            self.bias = None
+
         super(Smooth, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
         output = K.dot(input, self.W)        
-        # output = K.sum(output, axis=2)
+        
+        if self.use_bias:
+            output = K.bias_add(output, self.bias)
         
         if self.activation is not None:
             return self.activation(output)
@@ -104,30 +115,23 @@ class Densepool(Layer):
         super(Densepool, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        print ">>>>>> Densepool >>> "
+        # print ">>>>>> Densepool >>> "
         dim = K.int_shape(input)
         flat_input = K.reshape(input, (-1, dim[1] * 3, 3))
         # flat_input = K.permute_dimensions(flat_input, (1, 2, 0))
-        print K.int_shape(flat_input)      # None, 3876, 3
+        # print K.int_shape(flat_input)      # None, 3876, 3
         
         mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')   # 700 x 3876
-        print K.int_shape(mtx_tensor)    
-
-        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))   # 3876 x 700 
-        print K.int_shape(mtx_1_tensor)                
+        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))   # 3876 x 700              
 
         pos = K.dot(mtx_tensor, flat_input)
         new_pos = K.permute_dimensions(pos, (2, 0, 1))
-        print "new_pos shape >>> "
-        print K.int_shape(new_pos)  
 
         output = K.dot(mtx_1_tensor, new_pos)  
-        print "output shape >>> "
-        print K.int_shape(output) 
 
         s = K.int_shape(output)
         output = K.reshape(output, (-1, s[0]/3, 9))
-        print K.int_shape(output) 
+        # print K.int_shape(output) 
         
         if self.activation is not None:
             return self.activation(output)

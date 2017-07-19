@@ -3,15 +3,17 @@ import os, sys
 import os.path
 import operator
 import numpy as np 
+import logging
 from keras import backend as K
 from keras import utils
 from keras import regularizers
 from keras.models import Sequential, Model, load_model
 from keras.layers import Input, Dense, Lambda, merge, multiply, add
 from keras.layers import Activation, Embedding
+from keras.callbacks import LearningRateScheduler
 from keras.optimizers import SGD
 from m_layers import Smooth, Densepool
-from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, custom_add
+from util import load_data, obj_parser, face2mtx, obj2tri, tri2obj, write_obj, custom_add, step_decay
 
 
 def setmodel(input_shape, mtx, mtx_1):
@@ -24,7 +26,10 @@ def setmodel(input_shape, mtx, mtx_1):
     pool_1 = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_1')(smoo_1)  # 
 
     smoo_2 = Smooth(units=9, name='smoo_layer_2')(pool_1)
-    output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_2')(smoo_2)
+    pool_2 = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_2')(smoo_2)
+
+    smoo_3 = Smooth(units=9, name='smoo_layer_3')(pool_2)
+    output = Densepool(mtx=mtx, mtx_1=mtx_1, activation='softplus', name='pool_layer_3')(smoo_3)
     
     # model
     model = Model(inputs=[mesh_in], outputs=[output])
@@ -32,11 +37,15 @@ def setmodel(input_shape, mtx, mtx_1):
     return model
 
 
-def train(model, x_train, y_train):
+def train(model, x_train, y_train, learning_rate, epochs):
+    decay_rate = learning_rate / epochs
+    sgd = SGD(lr=learning_rate, decay=decay_rate, momentum=0.8, nesterov=False)
     model.compile(loss='mean_squared_error', optimizer='sgd', metrics=['mse', 'acc'])
 
-    print ">>>>>>> train model..."
-    history = model.fit(x_train, y_train, batch_size=32, epochs=200)
+    print ">>>>>>> train model >>>>>>> "
+    # lrate = LearningRateScheduler(step_decay)
+    lrate = EarlyStopping(monitor='val_loss', min_delta=0.001, patience=5, mode='min')
+    history = model.fit(x_train, y_train, validation_split=0.33, batch_size=32, epochs=epochs, callbacks=[lrate])
     print(history.history.keys())
 
 
@@ -63,8 +72,8 @@ def pred(model, x, v_dim, obj_in, obj_out):
 
 
 def save(model):
-    model.save('my_model.h5') 
-    model.save_weights('my_model_weights.h5')
+    model.save('kmodel/my_model.h5') 
+    model.save_weights('kmodel/my_model_weights.h5')
     del model
     
 
@@ -79,12 +88,14 @@ def main():
     parser.add_argument('-tf', help="test dataset: fine scale with track dir")
     parser.add_argument('-x', help="predict input dataset dir") 
     parser.add_argument('-o', help="predict output dir") 
+    parser.add_argument('-l', help="learning rate") 
+    parser.add_argument('-e', help="epochs") 
     parser.add_argument("-resume", help="bool flag, False by default")
     parser.add_argument("-modelh5", help="load exist model")
     parser.add_argument("-modelweighth5", help="load model weights")
     args = parser.parse_args()
     if len(sys.argv) < 4:
-        print "Usage: --train=False --eval=False --pred=True option* --> use --help"
+        print "Usage: --train=True -l=learning_rate -e=epochs -c=... -f=... --eval=False --pred=True option* --> use --help"
         return 0
 
     coarseDir = None
@@ -95,6 +106,8 @@ def main():
     out_dir = None
 
     if args.train:
+        learning_rate = float(args.l)
+        epochs = int(args.e)
         coarseDir = args.c
         fineDir = args.f
         print "training dataset: "
@@ -172,7 +185,7 @@ def main():
             print "Error: no input training data."
             return 0
 
-        train(model, x_train, y_train)
+        train(model, x_train, y_train, learning_rate, epochs)
 
     if args.eval:
         print 'load test data to evaluate...'

@@ -1,5 +1,6 @@
 import os, sys
 import numpy as np
+import math
 
 
 def to_list(x):
@@ -209,6 +210,16 @@ def write_obj(input, v_dim, obj_in, obj_out):
             f2.write(face)
 
 
+# Adapting the learning rate
+# 1. Decrease the learning rate gradually based on the epoch.
+# 2. Decrease the learning rate using punctuated large drops at specific epochs.
+# learning rate schedule
+def step_decay(epoch):
+    initial_lrate = 0.1
+    drop = 0.5
+    epochs_drop = 10.0
+    lrate = initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+    return lrate
 
 
 

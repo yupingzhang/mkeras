@@ -12,8 +12,8 @@ class Smooth(Layer):
     def __init__(self, 
                  units,
                  activation=None,
-                 use_bias=True,
-                 kernel_initializer='random_uniform',
+                 use_bias=False,
+                 kernel_initializer='random_normal',
                  bias_initializer='zeros',
                  kernel_regularizer=None,
                  bias_regularizer=None,
@@ -40,14 +40,11 @@ class Smooth(Layer):
             raise RuntimeError('specify input shape')
         
         # Create trainable weight variable for this layer.
-        # self.W = self.add_weight(name='weights',
-        #                               shape=(self.units, 9, 9),
-        #                               initializer='uniform',
-        #                               trainable=True)
         self.W = self.add_weight(name='weights',
                                       shape=(9, 9),
-                                      initializer='random_normal',
-                                      # initializer=self.kernel_initializer,
+                                      # initializer='random_normal',
+                                      initializer=self.kernel_initializer,
+                                      regularizer=self.kernel_regularizer,
                                       trainable=True)
 
         if self.use_bias:
@@ -62,8 +59,8 @@ class Smooth(Layer):
         super(Smooth, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        output = K.dot(input, self.W)        
-        
+        output = K.dot(input, self.W)    
+
         if self.use_bias:
             output = K.bias_add(output, self.bias)
         
@@ -115,25 +112,24 @@ class Densepool(Layer):
         super(Densepool, self).build(input_shape)  # Be sure to call this somewhere!
 
     def call(self, input):
-        # print ">>>>>> Densepool >>> "
         dim = K.int_shape(input)
         flat_input = K.reshape(input, (-1, dim[1] * 3, 3))
-        # flat_input = K.permute_dimensions(flat_input, (1, 2, 0))
-        # print K.int_shape(flat_input)      # None, 3876, 3
+        # print "flat shape: >>>"
+        # print flat_input.shape
         
-        mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')   # 700 x 3876
-        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))   # 3876 x 700              
+        mtx_tensor = K.constant(self.mtx, dtype='float32', name='mtx_tensor')   # v_num x (tri*3)
+        mtx_1_tensor = K.transpose(K.constant(self.mtx_1, dtype='float32', name='mtx_1_tensor'))                
 
-        pos = K.dot(mtx_tensor, flat_input)
-        new_pos = K.permute_dimensions(pos, (2, 0, 1))
-
-        output = K.dot(mtx_1_tensor, new_pos)  
-
+        pos = K.dot(mtx_tensor, flat_input)   
+        new_pos = K.permute_dimensions(pos, (1, 0, 2))
+        # print new_pos.shape   # (?, 700, 3)
+        
+        tri = K.dot(mtx_1_tensor, new_pos) 
+        output = K.permute_dimensions(tri, (1, 0, 2)) 
         s = K.int_shape(output)
-        output = K.reshape(output, (-1, s[0]/3, 9))
-        # print K.int_shape(output) 
-        
-        if self.activation is not None:
+        output = K.reshape(output, (-1, s[1]/3, 9))
+
+        if self.activation is not None:     
             return self.activation(output)
         else:
             return output

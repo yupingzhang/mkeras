@@ -3,23 +3,13 @@ import numpy as np
 import math
 
 
-def to_list(x):
-    '''This normalizes a list/tensor into a list.
-    If a tensor is passed, we return
-    a list of size 1 containing the tensor.
-    '''
-    if type(x) is list:
-        return x
-    return [x]
-
-
 # x y must be in same dimention
 def custom_add(x, y):
     return x + y
 
 
 # extend dataset x y
-def load_data(path_coarse, path_tracking):
+def load_data(path_coarse, path_tracking, tdelta=True):
     batch_coarse = []
     batch_fine = []
     
@@ -32,12 +22,17 @@ def load_data(path_coarse, path_tracking):
         
     # Trains the model for a fixed number of epochs (iterations on a dataset).
     x_train = np.array(batch_coarse) 
-    y_list = []
-    for i in range(len(batch_fine)):
-        y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
-        y_list.append(y_row)
-    y_train = np.array(y_list)
-
+    if tdelta:
+        print "target data: delta "
+        y_list = []
+        for i in range(len(batch_fine)):
+            y_row = np.array(batch_fine[i]) - np.array(batch_coarse[i])
+            y_list.append(y_row)
+        y_train = np.array(y_list)
+    else:
+        print "target data: batch fine "
+        y_train = np.array(batch_fine)
+    
     return x_train, y_train
 
 
@@ -73,6 +68,12 @@ def face2mtx(objfile, dim):
     
     mtx_1 = mtx
     mtx = mtx_1 / count
+    # print "=== count ==========================================="
+    # print count
+    # print "=== mtx_1 ==========================================="
+    # print mtx_1
+    # print "=== mtx ==========================================="
+    # print mtx
 
     return mtx, mtx_1
 
@@ -161,11 +162,21 @@ def tri2obj(input, v_dim, obj_in, obj_out):
                 vertices[id1] = input[tri_id][0:3]
                 vertices[id2] = input[tri_id][3:6]
                 vertices[id3] = input[tri_id][6:9]
+                # if vertices[id1].size == 0:
+                #     vertices[id1] = input[tri_id][0:3]
+                # if vertices[id2].size == 0:
+                #     vertices[id2] = input[tri_id][3:6]
+                # if vertices[id3].size == 0:
+                #     vertices[id3] = input[tri_id][6:9]
+
                 tri_id = tri_id + 1
                 # copy the face info
                 faces.append(line)
 
-    # check
+
+    #============= TODO: change to store the indices instead of opening the file everytime
+    
+
     # print len(faces)       #1292
     # print vertices.shape   #700,3
     if vertices.shape == 0:
@@ -181,13 +192,11 @@ def tri2obj(input, v_dim, obj_in, obj_out):
 
 
 # input is 3*n position
-def write_obj(input, v_dim, obj_in, obj_out):
+def write_obj(inputs, v_dim, obj_in, obj_out):
     if not os.path.isfile(obj_in):
         print "file not exist"
         return
     
-    inputs = to_list(input)
-    print inputs[0]
     faces = []
 
     # read from original obj
@@ -198,15 +207,12 @@ def write_obj(input, v_dim, obj_in, obj_out):
                 # copy the face info
                 faces.append(line)
 
-    # check
-    print len(faces)
-
     # write to new file
     with open(obj_out, "w+") as f2:
-        for x in range(vertices.shape):
-            line = "{} {} {}\n".format(inputs[x][0], inputs[x][1], inputs[x][2])
+        for x in range(0,700):
+            line = "v {} {} {}\n".format(inputs[x][0], inputs[x][1], inputs[x][2])
             f2.write(line)
-        for face in range(len(faces)):
+        for face in faces:
             f2.write(face)
 
 
